@@ -4,13 +4,23 @@ import (
 	"context"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/chromedp/chromedp"
 )
 
 func main() {
+	url_chromedriver := ""
 	// create context
-	ctx, cancel := chromedp.NewContext(context.Background())
+
+	ctx, cancel := chromedp.NewRemoteAllocator(context.Background(), url_chromedriver)
+	defer cancel()
+
+	ctx, cancel = chromedp.NewContext(ctx, chromedp.WithLogf(log.Printf))
+	defer cancel()
+
+	// Create context with a 30-second timeout
+	ctx, cancel = context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
 	// run task list

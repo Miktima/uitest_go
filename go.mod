@@ -1,6 +1,8 @@
 module uitest_go
 
-go 1.20
+go 1.23
+
+toolchain go1.23.5
 
 require github.com/chromedp/chromedp v0.12.1
 
