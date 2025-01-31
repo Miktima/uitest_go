@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -53,34 +54,57 @@ func main() {
 	// на портале евразийского экономического союза
 
 	var baseNodes []*cdp.Node
+
 	// Получаем список документов
+
 	err := chromedp.Run(ctx,
-		chromedp.Navigate(`https://docs.eaeunion.org/ru-ru/pages/regulation.aspx`),
-		chromedp.Sleep(2000*time.Millisecond),
-		chromedp.WaitVisible(`.discussionsAndRIA-panel`, chromedp.ByQuery),
-		chromedp.Nodes("//div[@class='discussionsAndRIA-panel']/table/tbody/tr", &baseNodes, chromedp.ByQueryAll),
+		chromedp.Navigate("https://regulation.eaeunion.org/pd/"),
+		chromedp.WaitVisible(".DocSearchResult_Item:nth-child(20)"),
+		chromedp.Nodes(".DocSearchResult_Item", &baseNodes, chromedp.ByQueryAll),
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Print("Number of basenodes:", len(baseNodes))
-	// В одну строку должны попадать два элемента <tr>
-	ntr := 1
-	var status, period string
-	for _, node := range baseNodes {
-		if ntr == 2 {
-			err = chromedp.Run(ctx,
-				chromedp.Text(".dd-status", &status, chromedp.ByQuery, chromedp.FromNode(node)),
-				chromedp.Text(".dd-period", &period, chromedp.ByQuery, chromedp.FromNode(node)),
-			)
+	fmt.Println("Number of basenodes:", len(baseNodes))
 
-			if err != nil {
-				log.Fatal("Error:", err)
-			}
-			fmt.Println(period, "     ", status)
-			ntr = 1
-		} else {
-			ntr = 2
+	red := regexp.MustCompile(`\d{2}.\d{2}.\d{4}`)
+
+	var dept, status, dates, etap string
+	i := 0
+	for _, node := range baseNodes {
+		i++
+		err = chromedp.Run(ctx,
+			chromedp.Text(".DocSearchResult_Item__Date", &status, chromedp.ByQuery, chromedp.FromNode(node)),
+			chromedp.Text(".DocSearchResult_Item__DatesLeft > div:nth-child(2)", &dept, chromedp.ByQuery, chromedp.FromNode(node)),
+			chromedp.Text(".DocSearchResult_Item__DatesRight > div:nth-child(1)", &dates, chromedp.ByQuery, chromedp.FromNode(node)),
+			chromedp.Text(".DocSearchResult_Item__DatesRight > div:nth-child(2)", &etap, chromedp.ByQuery, chromedp.FromNode(node)),
+		)
+		if err != nil {
+			log.Fatal("Error:", err)
+		}
+		// Возможно два этапа, если что-то иное, то ошибка
+		if !(strings.Trim(status, "\n\r") == "Общественное обсуждение" || strings.Trim(status, "\n\r") == "Оценка регулирующего воздействия") {
+			fmt.Println("Неизвестный статус:", status, " в позиции - ", i)
+		}
+		// Если наименование департамента пустое (длина пусть будет меньше 10 байт), то ошибка
+		if len(dept) < 10 {
+			fmt.Println("Департамент не указан в позиции - ", i)
+		}
+		flist := red.FindAllString(dates, -1)
+		sstartdate := strings.Split(flist[0], ".")
+		senddate := strings.Split(flist[1], ".")
+		var td, startdate, enddate time.Time
+		startdate, _ = time.Parse(time.DateOnly, fmt.Sprintf("%s-%s-%s", sstartdate[2], sstartdate[1], sstartdate[0]))
+		enddate, _ = time.Parse(time.DateOnly, fmt.Sprintf("%s-%s-%s", senddate[2], senddate[1], senddate[0]))
+		today := time.Now()
+		t_year, t_month, t_day := today.Date()
+		td, _ = time.Parse(time.DateOnly, fmt.Sprintf("%s-%s-%s", t_year, t_month, t_day))
+		if td == startdate && !(strings.Trim(etap, "\n\r") == "Создан") {
+			fmt.Println("Неверный этап:", etap, " в позиции - ", i)
+		} else if td.After(startdate) && td.Before(enddate) && !(strings.Trim(etap, "\n\r") == "Идет обсуждение") {
+			fmt.Println("Неверный этап:", etap, " в позиции - ", i)
+		} else if td.After(enddate) && !(strings.Trim(etap, "\n\r") == "Обсуждение завершено") {
+			fmt.Println("Неверный этап:", etap, " в позиции - ", i)
 		}
 	}
 }
