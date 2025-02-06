@@ -144,20 +144,30 @@ func main() {
 	var sshot []byte
 	var quality int
 	err = chromedp.Run(ctx,
-		// Кликаем по чекбоксу департамента
+		// Кликаем по чекбоксу департамента и кнопки выбора фильтра
 		chromedp.Click("#"+av_id, chromedp.ByQuery),
-		chromedp.Click(`//*[@id="js-modal-filter-dept"]/div/div/div/form/div[2]/button[1]`, chromedp.BySearch),
-		chromedp.WaitVisible(".DocSearchResult_Item:nth-child(20)", chromedp.ByQuery),
+		chromedp.Click(`//*[@id="js-modal-filter-dept"]/div/div/div/form/div[2]/button[1]`, chromedp.BySearch))
+	if err != nil {
+		log.Fatal(err)
+	}
+	// задержка
+	time.Sleep(3 * time.Second)
+
+	// делаем скриншот и забираем ноды
+	err = chromedp.Run(ctx,
 		chromedp.FullScreenshot(&sshot, quality),
 		chromedp.Nodes(".DocSearchResult_Item", &baseNodes, chromedp.ByQueryAll),
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// сохраняем скриншот
 	if err := os.WriteFile("fullScreenshot.png", sshot, 0o644); err != nil {
 		log.Fatal(err)
 	}
 
+	// проверяем, что указан выбранные департамент
 	i = 0
 	for _, node := range baseNodes {
 		i++
@@ -169,7 +179,7 @@ func main() {
 		}
 		// Наименование департамента должно соответствовать выбранному
 		if strings.Trim(dept, "\n\r") != strings.Trim(dept_sv, "\n\r") {
-			fmt.Printf("Департамент %s не соответствует выбранному в позиции - %d\n", dept, i)
+			fmt.Printf("%s не соответствует выбранному в позиции - %d\n", dept, i)
 		}
 	}
 
